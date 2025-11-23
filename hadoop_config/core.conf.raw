@@ -1,2 +1,0 @@
-hadoop_http_staticuser_user: root
-fs_defaultFS: hdfs://namenode:9000

@@ -1,5 +1,0 @@
-dfs_replication: 2
-dfs_permissions_enabled: false
-dfs_webhdfs_enabled: true
-dfs_client_use_datanode_hostname: true
-dfs_namenode_datanode_registration_ip___hostname___check: false

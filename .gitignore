@@ -1,0 +1,6 @@
+hadoop_datanode1
+hadoop_datanode2
+hadoop_namenode
+hive/conf/hiveserver2.pid
+airflow/airflow-webserver.pid
+airflow/dags/*

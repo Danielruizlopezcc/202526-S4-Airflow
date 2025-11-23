@@ -26,7 +26,7 @@
     <!-- Configuración del metastore con MySQL -->
     <property>
         <name>javax.jdo.option.ConnectionURL</name>
-        <value>jdbc:mysql://hive-metastore-db:3306/metastore_db?useSSL=false&amp;allowPublicKeyRetrieval=true&amp;serverTimezone=UTC</value>
+        <value>jdbc:mysql://mysql:3306/metastore_db?useSSL=false&amp;allowPublicKeyRetrieval=true&amp;serverTimezone=UTC</value>
     </property>
 
     <property>
@@ -43,7 +43,7 @@
     </property>
     <property>
         <name>hive.metastore.uris</name>
-        <value>thrift://hive-metastore:9083</value>
+        <value>thrift://metastore:9083</value>
     </property>
 
     <!-- Configuración del metastore -->
