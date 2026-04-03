@@ -1,19 +1,17 @@
-# Partimos de la imagen base de Airflow
 FROM apache/airflow:2.9.3-python3.9
 
-# Usamos el usuario airflow para instalar providers
 USER airflow
 
-# Instalamos los providers necesarios para PostgreSQL y Kafka
-# Pin apache-airflow to 2.9.3 to prevent upgrade to 3.x
+# Pin airflow version and install all required providers/libraries
 RUN pip install --no-cache-dir \
     "apache-airflow==2.9.3" \
     apache-airflow-providers-postgres \
     apache-airflow-providers-apache-kafka \
     kafka-python \
-    psycopg2-binary
+    psycopg2-binary \
+    pandas \
+    requests
 
-# Copiar el script de inicialización
 USER root
 COPY init-airflow.sh /init-airflow.sh
 RUN chmod +x /init-airflow.sh

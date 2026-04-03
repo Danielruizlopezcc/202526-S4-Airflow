@@ -4,3 +4,5 @@ hadoop_namenode
 hive/conf/hiveserver2.pid
 airflow/airflow-webserver.pid
 airflow/dags/*
+data/transformed_data.json
+data/analytics_results.json

@@ -1,12 +1,28 @@
 networks:
-  airflow_network:
+  pipeline_network:
     driver: bridge
 
 volumes:
   airflow-logs:
   postgres-db:
+  namenode_data:
+  datanode1_data:
+  kafka_data:
+
+# ── Hadoop environment shared across all HDFS nodes ──────────────────────────
+x-hadoop-common: &hadoop-common
+  user: root
+  environment:
+    HADOOP_HOME: /opt/hadoop
+    HADOOP_CONF_DIR: /opt/hadoop/etc/hadoop
+  networks:
+    - pipeline_network
 
 services:
+
+  # ════════════════════════════════════════════════════
+  # POSTGRESQL  –  Airflow metadata + sensor data tables
+  # ════════════════════════════════════════════════════
   postgres:
     image: postgres:15
     container_name: postgres
@@ -25,31 +41,131 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - airflow_network
+      - pipeline_network
 
+  # ════════════════════════════════════════════════════
+  # KAFKA  –  KRaft mode (no ZooKeeper)
+  # Internal broker: kafka:29092
+  # External (host): localhost:9092
+  # ════════════════════════════════════════════════════
   kafka:
     image: confluentinc/cp-kafka:7.9.0
     container_name: kafka
     hostname: kafka
+    volumes:
+      - kafka_data:/var/lib/kafka/data
     environment:
-      - KAFKA_NODE_ID=1
-      - KAFKA_PROCESS_ROLES=broker,controller
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:29093
-      - KAFKA_LISTENERS=PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk
-      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
-      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
-      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     ports:
       - "9092:9092"
     networks:
-      - airflow_network
+      - pipeline_network
 
+  # ════════════════════════════════════════════════════
+  # KAFKA CONNECT  –  HDFS Sink connector
+  # REST API: http://localhost:8083
+  # ════════════════════════════════════════════════════
+  kafka-connect:
+    build:
+      context: .
+      dockerfile: Dockerfile.kafka-connect
+    container_name: kafka-connect
+    hostname: kafka-connect
+    depends_on:
+      - kafka
+      - namenode
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:29092
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: connect-cluster
+      CONNECT_CONFIG_STORAGE_TOPIC: connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      HADOOP_CONF_DIR: /opt/hadoop/conf
+    volumes:
+      - ./hadoop_config:/opt/hadoop/conf:ro
+    ports:
+      - "8083:8083"
+    networks:
+      - pipeline_network
+
+  # ════════════════════════════════════════════════════
+  # KAFKA UI  –  Web console for topic inspection
+  # UI: http://localhost:8082
+  # ════════════════════════════════════════════════════
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: kafka-ui
+    hostname: kafka-ui
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8082:8080"
+    networks:
+      - pipeline_network
+
+  # ════════════════════════════════════════════════════
+  # HDFS NAMENODE  –  Filesystem metadata
+  # Web UI: http://localhost:9870
+  # RPC:    hdfs://namenode:9000
+  # ════════════════════════════════════════════════════
+  namenode:
+    <<: *hadoop-common
+    image: apache/hadoop:3.4.1
+    container_name: namenode
+    hostname: namenode
+    volumes:
+      - namenode_data:/opt/hadoop/data/nameNode
+      - ./hadoop_config:/opt/hadoop/etc/hadoop:ro
+      - ./scripts/start-hdfs.sh:/start-hdfs.sh:ro
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    command: ["/bin/bash", "/start-hdfs.sh"]
+
+  # ════════════════════════════════════════════════════
+  # HDFS DATANODE  –  Actual block storage
+  # ════════════════════════════════════════════════════
+  datanode1:
+    <<: *hadoop-common
+    image: apache/hadoop:3.4.1
+    container_name: datanode1
+    hostname: datanode1
+    volumes:
+      - datanode1_data:/opt/hadoop/data/dataNode
+      - ./hadoop_config:/opt/hadoop/etc/hadoop:ro
+      - ./scripts/init-datanode.sh:/init-datanode.sh:ro
+    depends_on:
+      - namenode
+    command: ["/bin/bash", "/init-datanode.sh"]
+
+  # ════════════════════════════════════════════════════
+  # AIRFLOW  –  DAG orchestrator
+  # Web UI: http://localhost:8081  (admin/admin)
+  # ════════════════════════════════════════════════════
   airflow:
     build:
       context: .
@@ -62,21 +178,20 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      namenode:
+        condition: service_started
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-      - AIRFLOW__CORE__FERNET_KEY='d6nNXtWJQL85dCkOTB8FRQ5TPAi6XW7Xbw3l84QJ8q8='
+      - AIRFLOW__CORE__FERNET_KEY=d6nNXtWJQL85dCkOTB8FRQ5TPAi6XW7Xbw3l84QJ8q8=
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
     volumes:
-      - ./airflow/dags:/opt/airflow/dags
+      - ./src:/opt/airflow/dags
+      - ./data:/opt/airflow/data
       - airflow-logs:/opt/airflow/logs
     entrypoint: /bin/bash
     command: /init-airflow.sh
     ports:
       - "8081:8080"
     networks:
-      - airflow_network
-        
-
-
-
+      - pipeline_network

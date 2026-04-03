@@ -1,0 +1,55 @@
+<configuration>
+    <!-- Single replica (development cluster) -->
+    <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+    </property>
+
+    <!-- NameNode storage -->
+    <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:///opt/hadoop/data/nameNode</value>
+    </property>
+
+    <!-- DataNode storage -->
+    <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>file:///opt/hadoop/data/dataNode</value>
+    </property>
+
+    <!-- NameNode HTTP (WebHDFS + Web UI) -->
+    <property>
+        <name>dfs.namenode.http-address</name>
+        <value>namenode:9870</value>
+    </property>
+
+    <!-- DataNode HTTP address (used for WebHDFS redirects) -->
+    <property>
+        <name>dfs.datanode.http.address</name>
+        <value>0.0.0.0:9864</value>
+    </property>
+
+    <!-- Enable WebHDFS REST API -->
+    <property>
+        <name>dfs.webhdfs.enabled</name>
+        <value>true</value>
+    </property>
+
+    <!-- Disable permissions for dev environment -->
+    <property>
+        <name>dfs.permissions.enabled</name>
+        <value>false</value>
+    </property>
+
+    <!-- Use hostnames in DataNode registration (Docker-friendly) -->
+    <property>
+        <name>dfs.datanode.use.datanode.hostname</name>
+        <value>true</value>
+    </property>
+
+    <!-- Use hostname for client connections -->
+    <property>
+        <name>dfs.client.use.datanode.hostname</name>
+        <value>true</value>
+    </property>
+</configuration>

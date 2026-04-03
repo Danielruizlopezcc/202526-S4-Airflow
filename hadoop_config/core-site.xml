@@ -1,0 +1,31 @@
+<configuration>
+    <!-- NameNode address -->
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://namenode:9000</value>
+    </property>
+
+    <!-- Use hostname instead of IP for token service -->
+    <property>
+        <name>hadoop.security.token.service.use_ip</name>
+        <value>false</value>
+    </property>
+
+    <!-- Temporary directory for Hadoop -->
+    <property>
+        <name>hadoop.tmp.dir</name>
+        <value>/opt/hadoop/tmp</value>
+    </property>
+
+    <!-- RPC connection timeout (30 seconds) -->
+    <property>
+        <name>ipc.client.connect.timeout</name>
+        <value>30000</value>
+    </property>
+
+    <!-- Simple authentication for development environment -->
+    <property>
+        <name>hadoop.security.authentication</name>
+        <value>simple</value>
+    </property>
+</configuration>
